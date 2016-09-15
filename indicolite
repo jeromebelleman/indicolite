@@ -1,0 +1,176 @@
+#! /usr/bin/env python
+
+'''
+Browse Indico from the command line
+'''
+
+import sys
+import os
+import argparse
+import time
+import subprocess
+import hmac
+import hashlib
+import urllib
+import yaml
+import requests
+
+PURPLE      = r'\033[95m'
+BLUE        = r'\033[94m'
+GREEN       = r'\033[92m'
+YELLOW      = r'\033[93m'
+RED         = r'\033[91m'
+BOLD        = r'\033[1m'
+UNDERLINE   = r'\033[4m'
+ENDC        = r'\033[0m'
+
+def parsedate(string):
+    '''
+    Parse date with date command
+    '''
+
+    proc = subprocess.Popen(
+        ['date', '-d', string, '+%Y-%m-%d'],
+        stdout=subprocess.PIPE,
+    )
+    return proc.communicate()[0]
+
+def downloadall(cfg, results, since):
+    '''
+    Download all material
+    '''
+
+    for result in results:
+        if not since or result['startDate']['date'] > since:
+            print '%s%s%s, %s%s%s' % (
+                PURPLE,
+                result['title'],
+                ENDC,
+                GREEN,
+                result['startDate']['date'],
+                ENDC,
+            )
+            try:
+                downloads = '%s/%s' % (cfg['downloads'], result['id'])
+                os.mkdir(downloads)
+            except OSError:
+                pass
+            for folder in result['folders']:
+                for attachment in folder['attachments']:
+                    outpath = '%s/%s' % (downloads, attachment['filename'])
+                    print "\tWriting %s" % outpath
+                    download(
+                        cfg,
+                        result['id'],
+                        folder['id'],
+                        attachment['id'],
+                        outpath,
+                    )
+
+def get(cfg, path):
+    '''
+    Sign URL and get
+    '''
+
+    params = [
+        ('apikey', cfg['token']),
+        ('timestamp', int(time.time())),
+    ]
+    sign = hmac.new(
+        cfg['secret'],
+        '%s?%s' % (path, urllib.urlencode(params)),
+        hashlib.sha1).hexdigest()
+    params.append(('signature', sign))
+    url = '%s%s?%s' % (
+        cfg['server'],
+        path,
+        urllib.urlencode(params),
+    )
+    return requests.get(url)
+
+def download(cfg, event, material, resource, outpath):
+    '''
+    Download material
+    '''
+
+    path = '/export/event/%s/material/%s/%s.bin' % (
+        event,
+        material,
+        resource,
+    )
+    
+    if os.path.exists(outpath):
+        print >> sys.stderr, "\t%s%s already exists%s" % (
+            RED,
+            outpath,
+            ENDC,
+        )
+    else:
+        with open(outpath, 'w') as fhl:
+            print >> fhl, get(cfg, path).content
+
+
+def lscat(element, elemid, cfg):
+    '''
+    List category
+    '''
+
+    path = '/export/%s/%d.%s' % (
+        element,
+        elemid,
+        cfg['type'],
+    )
+    return get(cfg, path).json()['results']
+
+
+def main():
+    '''
+    Parse arguments and config
+    '''
+
+    # Parse arguments
+    parser = argparse.ArgumentParser(
+        description='Browse Indico from the command line.',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument(
+        '-d',
+        '--directory',
+        help="Indicolite directory",
+        default='~/.indicolite',
+    )
+    parser.add_argument(
+        'element',
+        choices=('categ', 'event', 'room', 'reservation'),
+        help="element kind",
+    )
+    parser.add_argument(
+        'elemid',
+        type=int,
+        help="element ID",
+    )
+    args = parser.parse_args()
+
+    # Load config
+    with open(os.path.expanduser(args.directory + '/cfg.yaml')) as fhl:
+        cfg = yaml.load(fhl)
+
+    # Parse date
+    if cfg['since']:
+        since = parsedate(cfg['since'])
+        if not since:
+            return 1
+    else:
+        since = None
+
+    # Query
+    results = lscat(args.element, args.elemid, cfg)
+
+    # Report
+    downloadall(cfg, results, since)
+
+if __name__ == '__main__':
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        pass
