@@ -27,7 +27,6 @@ ENDC = '\033[0m' # pylint: disable=anomalous-backslash-in-string
 
 # TODO Check subcontributions, etc. - everything.
 # TODO Sort
-# TODO Do since from server
 
 def parsedate(string):
     '''
@@ -38,9 +37,9 @@ def parsedate(string):
         ['date', '-d', string, '+%Y-%m-%d'],
         stdout=subprocess.PIPE,
     )
-    return proc.communicate()[0]
+    return proc.communicate()[0].strip()
 
-def getfolder(cfg, result, folders, downloads):
+def getfolder(cfg, result, folders, downloads, since):
     '''
     Get all material from folder
     '''
@@ -56,6 +55,7 @@ def getfolder(cfg, result, folders, downloads):
                     folder['id'],
                     attachment['id'],
                     outpath,
+                    since,
                 )
             else:
                 print >> sys.stderr, "\t%s%s doesn't have a file name%s" % (
@@ -70,30 +70,29 @@ def getmaterial(cfg, results, since, cat):
     '''
 
     for result in results:
-        if not since or result['startDate']['date'] > since:
-            # Print events
-            print '%s%s%s, %s%s%s' % (
-                PURPLE,
-                result['title'],
-                ENDC,
-                GREEN,
-                result['startDate']['date'],
-                ENDC,
-            )
+        # Print events
+        print '%s%s%s, %s%s%s' % (
+            PURPLE,
+            result['title'],
+            ENDC,
+            GREEN,
+            result['startDate']['date'],
+            ENDC,
+        )
 
-            # Make directories
-            try:
-                downloads = '%s/%s/%s' % (cfg['downloads'], cat, result['id'])
-                os.makedirs(downloads)
-            except OSError:
-                pass
+        # Make directories
+        try:
+            downloads = '%s/%s/%s' % (cfg['downloads'], cat, result['id'])
+            os.makedirs(downloads)
+        except OSError:
+            pass
 
-            # Get folders
-            getfolder(cfg, result, result['folders'], downloads)
-            for contribution in result['contributions']:
-                getfolder(cfg, result, contribution['folders'], downloads)
+        # Get folders
+        getfolder(cfg, result, result['folders'], downloads, since)
+        for contribution in result['contributions']:
+            getfolder(cfg, result, contribution['folders'], downloads, since)
 
-def get(cfg, path):
+def get(cfg, path, since):
     '''
     Sign URL and get
     '''
@@ -102,6 +101,7 @@ def get(cfg, path):
         ('apikey', cfg['token']),
         ('timestamp', int(time.time())),
         ('detail', 'contributions'),
+        ('from', since),
     ])
 
     sign = hmac.new(
@@ -119,7 +119,7 @@ def get(cfg, path):
 
     return requests.get(url)
 
-def download(cfg, event, material, resource, outpath):
+def download(cfg, event, material, resource, outpath, since):
     '''
     Download material
     '''
@@ -138,17 +138,18 @@ def download(cfg, event, material, resource, outpath):
         )
     else:
         with open(outpath, 'w') as fhl:
-            print >> fhl, get(cfg, path).content
+            print >> fhl, get(cfg, path, since).content
 
-def getcategory(cfg, cat, verbose):
+def getcategory(cfg, cat, since, verbose):
     '''
     Get category
     '''
 
     path = '/export/categ/%d.json' % cat
-    content = get(cfg, path).json()
+    content = get(cfg, path, since).json()
     if verbose:
         print json.dumps(content, indent=1)
+
     return content['results']
 
 def main():
@@ -189,7 +190,7 @@ def main():
 
     # Query
     for cat in cfg['categories']:
-        results = getcategory(cfg, cfg['categories'][cat], args.verbose)
+        results = getcategory(cfg, cfg['categories'][cat], since, args.verbose)
 
         # Report
         getmaterial(cfg, results, since, cat)
