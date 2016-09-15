@@ -9,6 +9,7 @@ import os
 import argparse
 import time
 import subprocess
+import json
 import hmac
 import hashlib
 import urllib
@@ -110,13 +111,16 @@ def download(cfg, event, material, resource, outpath):
             print >> fhl, get(cfg, path).content
 
 
-def lscat(cfg, cat):
+def lscat(cfg, cat, verbose):
     '''
     List category
     '''
 
     path = '/export/categ/%d.json' % cat
-    return get(cfg, path).json()['results']
+    content = get(cfg, path).json()
+    if verbose:
+        print json.dumps(content, indent=1)
+    return content['results']
 
 
 def main():
@@ -135,6 +139,12 @@ def main():
         help="Indicolite directory",
         default='~/.indicolite',
     )
+    parser.add_argument(
+        '-v',
+        '--verbose',
+        help="print JSON output",
+        action='store_true',
+    )
     args = parser.parse_args()
 
     # Load config
@@ -151,7 +161,7 @@ def main():
 
     # Query
     for cat in cfg['categories']:
-        results = lscat(cfg, cfg['categories'][cat])
+        results = lscat(cfg, cfg['categories'][cat], args.verbose)
 
         # Report
         downloadall(cfg, results, since, cat)
