@@ -16,14 +16,18 @@ import urllib
 import yaml
 import requests
 
-PURPLE      = '\033[95m'    # pylint: disable=anomalous-backslash-in-string
-BLUE        = '\033[94m'    # pylint: disable=anomalous-backslash-in-string
-GREEN       = '\033[92m'    # pylint: disable=anomalous-backslash-in-string
-YELLOW      = '\033[93m'    # pylint: disable=anomalous-backslash-in-string
-RED         = '\033[91m'    # pylint: disable=anomalous-backslash-in-string
-BOLD        = '\033[1m'     # pylint: disable=anomalous-backslash-in-string
-UNDERLINE   = '\033[4m'     # pylint: disable=anomalous-backslash-in-string
-ENDC        = '\033[0m'     # pylint: disable=anomalous-backslash-in-string
+PURPLE = '\033[95m' # pylint: disable=anomalous-backslash-in-string
+BLUE = '\033[94m' # pylint: disable=anomalous-backslash-in-string
+GREEN = '\033[92m' # pylint: disable=anomalous-backslash-in-string
+YELLOW = '\033[93m' # pylint: disable=anomalous-backslash-in-string
+RED = '\033[91m' # pylint: disable=anomalous-backslash-in-string
+BOLD = '\033[1m' # pylint: disable=anomalous-backslash-in-string
+UNDERLINE = '\033[4m' # pylint: disable=anomalous-backslash-in-string
+ENDC = '\033[0m' # pylint: disable=anomalous-backslash-in-string
+
+# TODO Check subcontributions, etc. - everything.
+# TODO Sort
+# TODO Do since from server
 
 def parsedate(string):
     '''
@@ -36,13 +40,38 @@ def parsedate(string):
     )
     return proc.communicate()[0]
 
-def downloadall(cfg, results, since, cat):
+def getfolder(cfg, result, folders, downloads):
     '''
-    Download all material
+    Get all material from folder
+    '''
+
+    for folder in folders:
+        for attachment in folder['attachments']:
+            if 'filename' in attachment:
+                outpath = '%s/%s' % (downloads, attachment['filename'])
+                print "\tWriting %s" % outpath
+                download(
+                    cfg,
+                    result['id'],
+                    folder['id'],
+                    attachment['id'],
+                    outpath,
+                )
+            else:
+                print >> sys.stderr, "\t%s%s doesn't have a file name%s" % (
+                    RED,
+                    attachment['download_url'],
+                    ENDC,
+                )
+
+def getmaterial(cfg, results, since, cat):
+    '''
+    Get material
     '''
 
     for result in results:
         if not since or result['startDate']['date'] > since:
+            # Print events
             print '%s%s%s, %s%s%s' % (
                 PURPLE,
                 result['title'],
@@ -51,42 +80,43 @@ def downloadall(cfg, results, since, cat):
                 result['startDate']['date'],
                 ENDC,
             )
+
+            # Make directories
             try:
                 downloads = '%s/%s/%s' % (cfg['downloads'], cat, result['id'])
                 os.makedirs(downloads)
             except OSError:
                 pass
-            for folder in result['folders']:
-                for attachment in folder['attachments']:
-                    outpath = '%s/%s' % (downloads, attachment['filename'])
-                    print "\tWriting %s" % outpath
-                    download(
-                        cfg,
-                        result['id'],
-                        folder['id'],
-                        attachment['id'],
-                        outpath,
-                    )
+
+            # Get folders
+            getfolder(cfg, result, result['folders'], downloads)
+            for contribution in result['contributions']:
+                getfolder(cfg, result, contribution['folders'], downloads)
 
 def get(cfg, path):
     '''
     Sign URL and get
     '''
 
-    params = [
+    params = sorted([
         ('apikey', cfg['token']),
         ('timestamp', int(time.time())),
-    ]
+        ('detail', 'contributions'),
+    ])
+
     sign = hmac.new(
         cfg['secret'],
         '%s?%s' % (path, urllib.urlencode(params)),
         hashlib.sha1).hexdigest()
+
     params.append(('signature', sign))
+
     url = '%s%s?%s' % (
         cfg['server'],
         path,
         urllib.urlencode(params),
     )
+
     return requests.get(url)
 
 def download(cfg, event, material, resource, outpath):
@@ -99,7 +129,7 @@ def download(cfg, event, material, resource, outpath):
         material,
         resource,
     )
-    
+
     if os.path.exists(outpath):
         print >> sys.stderr, "\t%s%s already exists%s" % (
             RED,
@@ -110,10 +140,9 @@ def download(cfg, event, material, resource, outpath):
         with open(outpath, 'w') as fhl:
             print >> fhl, get(cfg, path).content
 
-
-def lscat(cfg, cat, verbose):
+def getcategory(cfg, cat, verbose):
     '''
-    List category
+    Get category
     '''
 
     path = '/export/categ/%d.json' % cat
@@ -121,7 +150,6 @@ def lscat(cfg, cat, verbose):
     if verbose:
         print json.dumps(content, indent=1)
     return content['results']
-
 
 def main():
     '''
@@ -161,10 +189,10 @@ def main():
 
     # Query
     for cat in cfg['categories']:
-        results = lscat(cfg, cfg['categories'][cat], args.verbose)
+        results = getcategory(cfg, cfg['categories'][cat], args.verbose)
 
         # Report
-        downloadall(cfg, results, since, cat)
+        getmaterial(cfg, results, since, cat)
 
 if __name__ == '__main__':
     try:
