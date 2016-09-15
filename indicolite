@@ -15,14 +15,14 @@ import urllib
 import yaml
 import requests
 
-PURPLE      = r'\033[95m'
-BLUE        = r'\033[94m'
-GREEN       = r'\033[92m'
-YELLOW      = r'\033[93m'
-RED         = r'\033[91m'
-BOLD        = r'\033[1m'
-UNDERLINE   = r'\033[4m'
-ENDC        = r'\033[0m'
+PURPLE      = '\033[95m'    # pylint: disable=anomalous-backslash-in-string
+BLUE        = '\033[94m'    # pylint: disable=anomalous-backslash-in-string
+GREEN       = '\033[92m'    # pylint: disable=anomalous-backslash-in-string
+YELLOW      = '\033[93m'    # pylint: disable=anomalous-backslash-in-string
+RED         = '\033[91m'    # pylint: disable=anomalous-backslash-in-string
+BOLD        = '\033[1m'     # pylint: disable=anomalous-backslash-in-string
+UNDERLINE   = '\033[4m'     # pylint: disable=anomalous-backslash-in-string
+ENDC        = '\033[0m'     # pylint: disable=anomalous-backslash-in-string
 
 def parsedate(string):
     '''
@@ -35,7 +35,7 @@ def parsedate(string):
     )
     return proc.communicate()[0]
 
-def downloadall(cfg, results, since):
+def downloadall(cfg, results, since, cat):
     '''
     Download all material
     '''
@@ -51,8 +51,8 @@ def downloadall(cfg, results, since):
                 ENDC,
             )
             try:
-                downloads = '%s/%s' % (cfg['downloads'], result['id'])
-                os.mkdir(downloads)
+                downloads = '%s/%s/%s' % (cfg['downloads'], cat, result['id'])
+                os.makedirs(downloads)
             except OSError:
                 pass
             for folder in result['folders']:
@@ -110,16 +110,12 @@ def download(cfg, event, material, resource, outpath):
             print >> fhl, get(cfg, path).content
 
 
-def lscat(element, elemid, cfg):
+def lscat(cfg, cat):
     '''
     List category
     '''
 
-    path = '/export/%s/%d.%s' % (
-        element,
-        elemid,
-        cfg['type'],
-    )
+    path = '/export/categ/%d.json' % cat
     return get(cfg, path).json()['results']
 
 
@@ -139,16 +135,6 @@ def main():
         help="Indicolite directory",
         default='~/.indicolite',
     )
-    parser.add_argument(
-        'element',
-        choices=('categ', 'event', 'room', 'reservation'),
-        help="element kind",
-    )
-    parser.add_argument(
-        'elemid',
-        type=int,
-        help="element ID",
-    )
     args = parser.parse_args()
 
     # Load config
@@ -164,10 +150,11 @@ def main():
         since = None
 
     # Query
-    results = lscat(args.element, args.elemid, cfg)
+    for cat in cfg['categories']:
+        results = lscat(cfg, cfg['categories'][cat])
 
-    # Report
-    downloadall(cfg, results, since)
+        # Report
+        downloadall(cfg, results, since, cat)
 
 if __name__ == '__main__':
     try:
