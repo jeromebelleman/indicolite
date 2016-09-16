@@ -58,7 +58,7 @@ def getfolders(cfg, result, folders, downloads, since, dryrun):
                     dryrun,
                 )
             else:
-                print >> sys.stderr, "\t%s%s doesn't have a file name%s" % (
+                print "\t%s%s doesn't have a file name%s" % (
                     RED,
                     attachment['download_url'],
                     ENDC,
@@ -71,10 +71,16 @@ def getmaterial(cfg, results, since, cat, dryrun):
 
     for result in results:
         # Print events
-        print '%s%s%s, %s%s%s' % (
+        print '%s%s%s, %s%s%s, %s%s%s' % (
+
             PURPLE,
             result['title'],
             ENDC,
+
+            YELLOW,
+            result['url'],
+            ENDC,
+
             GREEN,
             result['startDate']['date'],
             ENDC,
@@ -141,11 +147,12 @@ def download(cfg, event, material, resource, outpath, since, dryrun):
     )
 
     if os.path.exists(outpath):
-        print >> sys.stderr, "\t%s%s already exists%s" % (
-            RED,
-            outpath,
-            ENDC,
-        )
+        if cfg['warnexist']:
+            print "\t%s%s already exists%s" % (
+                RED,
+                outpath,
+                ENDC,
+            )
     else:
         if not dryrun:
             with open(outpath, 'w') as fhl:
