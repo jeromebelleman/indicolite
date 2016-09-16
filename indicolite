@@ -38,7 +38,7 @@ def parsedate(string):
     )
     return proc.communicate()[0].strip()
 
-def getfolder(cfg, result, folders, downloads, since, dryrun):
+def getfolders(cfg, result, folders, downloads, since, dryrun):
     '''
     Get all material from folder
     '''
@@ -89,9 +89,15 @@ def getmaterial(cfg, results, since, cat, dryrun):
                 pass
 
         # Get folders
-        getfolder(cfg, result, result['folders'], downloads, since)
-        for contribution in result['contributions']:
-            getfolder(cfg, result, contribution['folders'], downloads, since)
+        folders = result['folders']
+        if 'contributions' in result:
+            for contrib in result['contributions']:
+                folders.extend(contrib['folders'])
+                if 'subContributions' in contrib:
+                    for subcontrib in contrib['subContributions']:
+                        folders.extend(subcontrib['folders'])
+
+        getfolders(cfg, result, folders, downloads, since, dryrun)
 
 def get(cfg, path, since):
     '''
@@ -101,7 +107,9 @@ def get(cfg, path, since):
     params = sorted([
         ('apikey', cfg['token']),
         ('timestamp', int(time.time())),
-        ('detail', 'contributions'),
+        ('detail', 'subcontributions'), # subcontributions imply contributions
+                                        # It doesn't seem there's anything
+                                        # interesting in sessions
         ('from', since),
         ('order', 'start'),
     ])
