@@ -38,7 +38,7 @@ def parsedate(string):
     )
     return proc.communicate()[0].strip()
 
-def getfolder(cfg, result, folders, downloads, since):
+def getfolder(cfg, result, folders, downloads, since, dryrun):
     '''
     Get all material from folder
     '''
@@ -55,6 +55,7 @@ def getfolder(cfg, result, folders, downloads, since):
                     attachment['id'],
                     outpath,
                     since,
+                    dryrun,
                 )
             else:
                 print >> sys.stderr, "\t%s%s doesn't have a file name%s" % (
@@ -63,7 +64,7 @@ def getfolder(cfg, result, folders, downloads, since):
                     ENDC,
                 )
 
-def getmaterial(cfg, results, since, cat):
+def getmaterial(cfg, results, since, cat, dryrun):
     '''
     Get material
     '''
@@ -80,11 +81,12 @@ def getmaterial(cfg, results, since, cat):
         )
 
         # Make directories
-        try:
-            downloads = '%s/%s/%s' % (cfg['downloads'], cat, result['id'])
-            os.makedirs(downloads)
-        except OSError:
-            pass
+        downloads = '%s/%s/%s' % (cfg['downloads'], cat, result['id'])
+        if not dryrun:
+            try:
+                os.makedirs(downloads)
+            except OSError:
+                pass
 
         # Get folders
         getfolder(cfg, result, result['folders'], downloads, since)
@@ -119,7 +121,7 @@ def get(cfg, path, since):
 
     return requests.get(url)
 
-def download(cfg, event, material, resource, outpath, since):
+def download(cfg, event, material, resource, outpath, since, dryrun):
     '''
     Download material
     '''
@@ -137,8 +139,9 @@ def download(cfg, event, material, resource, outpath, since):
             ENDC,
         )
     else:
-        with open(outpath, 'w') as fhl:
-            print >> fhl, get(cfg, path, since).content
+        if not dryrun:
+            with open(outpath, 'w') as fhl:
+                print >> fhl, get(cfg, path, since).content
 
 def getcategory(cfg, cat, since, verbose):
     '''
@@ -174,6 +177,12 @@ def main():
         help="print JSON output",
         action='store_true',
     )
+    parser.add_argument(
+        '-n',
+        '--dryrun',
+        help="don't write anything to disk",
+        action='store_true',
+    )
     args = parser.parse_args()
 
     # Load config
@@ -193,7 +202,7 @@ def main():
         results = getcategory(cfg, cfg['categories'][cat], since, args.verbose)
 
         # Report
-        getmaterial(cfg, results, since, cat)
+        getmaterial(cfg, results, since, cat, args.dryrun)
 
 if __name__ == '__main__':
     try:
