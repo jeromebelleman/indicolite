@@ -1,3 +1,6 @@
+Browse Indico from the command line by downloading all material from a list
+of categories.
+
 # NAME
 
 indicolite – Browse Indico from the command line
